@@ -1,0 +1,91 @@
+#include <SoftwareSerial.h>
+
+// Define pins
+const int buzzerPin = 8;
+const int alcoholSensorPin = A0;
+const int motor=4;
+// Define SoftwareSerial objects for communication
+SoftwareSerial sim800(3, 2); // RX, TX for SIM800L
+SoftwareSerial gpsSerial(6, 7); // RX, TX for Neo6M
+
+// Define mobile number for SMS
+const char* mobileNumber = "85209*****"; // Replace with your mobile number
+
+void setup() {
+  // Initialize serial communication with Arduino IDE (Serial Monitor)
+  Serial.begin(9600);
+  
+  // Initialize serial communication with SIM800L module
+  sim800.begin(9600);
+  
+  // Initialize serial communication with Neo6M module
+  gpsSerial.begin(9600);
+  
+  // Set buzzer pin as output
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(motor, OUTPUT);
+
+}
+
+void loop() {
+  // Check for alcohol sensor reading
+  int sensorValue = analogRead(alcoholSensorPin);
+  digitalWrite(motor,LOW);
+  digitalWrite(buzzerPin, LOW);
+
+  // Print alcohol value to serial monitor
+  Serial.print("Alcohol Sensor Value: ");
+  Serial.println(sensorValue);
+
+  // Define threshold for alcohol detection (adjust based on sensor sensitivity)
+  const int threshold = 915;
+  
+  if (sensorValue > threshold) {
+    Serial.println("Alcohol detected!");
+    
+    // Turn on buzzer
+    digitalWrite(buzzerPin, HIGH);
+    digitalWrite(motor,HIGH);
+    
+    // Get GPS location (modify based on NMEA sentence format)
+    String location = "";
+    if (gpsSerial.available()) {
+      while (gpsSerial.available()) {
+        location += gpsSerial.readStringUntil('\n');
+        if (location.indexOf("GNGGA") > -1) { // Check for GNGGA sentence (replace with your desired NMEA sentence)
+          break;
+        }
+      }
+    }
+    
+    // Send SMS with location if available
+    if (location.length() > 0) {
+      sendSMS(mobileNumber, "Alcohol detected! Location: " + location);
+    } else {
+      sendSMS(mobileNumber, "Alcohol detected! GPS location unavailable.");
+    }
+  }
+  
+  delay(5000); // Adjust delay based on desired check frequency
+}
+
+// Function to send SMS using SIM800L
+void sendSMS(const char* number, String message) {
+  Serial.println("Sending SMS...");
+  
+  // AT commands for SIM800L (modify based on your network provider)
+  sim800.println("AT+CMGF=1"); // Set SMS mode to text mode
+  delay(1000);
+  
+  sim800.print("AT+CMGS=\"");
+  sim800.print(number);
+  sim800.println("\"\r");
+  delay(1000);
+  
+  sim800.println(message);
+  delay(1000);
+  sim800.println((char)26); // Ctrl+Z to end SMS
+  delay(2000);
+  
+  Serial.println("SMS sent (hopefully).");
+}
